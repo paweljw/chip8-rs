@@ -140,12 +140,15 @@ impl Cpu {
             0x2000 => self.call(opcode.nnn()),
             0x3000 => self.ske(opcode.x(), opcode.kk()),
             0x4000 => self.skne(opcode.x(), opcode.kk()),
+            0x5000 => self.skre(opcode.x(), opcode.y()),
             0x6000 => self.load(opcode.x(), opcode.kk()),
             0x7000 => self.add(opcode.x(), opcode.kk()),
             0x8000 => match opcode.n() {
                 0x0 => self.mov(opcode.x(), opcode.y()),
                 0x2 => self.and(opcode.x(), opcode.y()),
                 0x4 => self.addr(opcode.x(), opcode.y()),
+                0x6 => self.shr(opcode.x(), opcode.y()),
+                0xE => self.shl(opcode.x(), opcode.y()),
                 _ => panic!("Unknown in math: {}", opcode),
             },
             0xA000 => self.loadi(opcode.nnn()),
@@ -155,6 +158,7 @@ impl Cpu {
                 0x07 => self.moved(opcode.x()),
                 0x15 => self.loadd(opcode.x()),
                 0x1e => self.addi(opcode.x()),
+                0x55 => self.stor(opcode.x()),
                 0x65 => self.read(opcode.x()),
                 _ => panic!("Unknown NN for opcode: {}", opcode),
             },
@@ -209,10 +213,10 @@ impl Cpu {
             &self.memory[usize::from(self.index_register)..usize::from(self.index_register + n)];
 
         for (i, byte) in sprite.iter().enumerate() {
-            for num in 0..8 {
+            for num in 0..10 {
                 if (byte & (0x80 >> num)) != 0 {
-                    let position_y: usize = (usize::from(pos_y) + i) % 32;
-                    let position_x: usize = usize::from((pos_x + num) % 64);
+                    let position_y: usize = usize::from(pos_y as usize + i) % 32;
+                    let position_x: usize = usize::from(pos_x as usize + num) % 64;
 
                     let pixel = if self.graphics[position_y][position_x] {
                         1
@@ -328,6 +332,38 @@ impl Cpu {
             self.register[offset as usize] = self.memory[(self.index_register + offset) as usize];
         }
 
+        // self.index_register += x + 1; // this is very questionable
+
         self.program_counter += 2;
+    }
+
+    fn shl(&mut self, x: u16, y: u16) {
+        self.register[0xF] = (self.register[x as usize] >> 7) & 0x1;
+        self.register[y as usize] = self.register[x as usize] << 1;
+        self.program_counter += 2;
+    }
+
+    fn shr(&mut self, x: u16, y: u16) {
+        self.register[0xF] = self.register[x as usize] & 0x1;
+        self.register[y as usize] = self.register[x as usize] >> 1;
+        self.program_counter += 2;
+    }
+
+    fn stor(&mut self, x: u16) {
+        for offset in 0..(x + 1) {
+            self.memory[(self.index_register + offset) as usize] = self.register[offset as usize];
+        }
+
+        // self.index_register += x + 1; // this is very questionable
+
+        self.program_counter += 2;
+    }
+
+    fn skre(&mut self, register: u16, y: u16) {
+        if self.register[usize::from(register)] == self.register[y as usize] {
+            self.program_counter += 4;
+        } else {
+            self.program_counter += 2;
+        }
     }
 }
