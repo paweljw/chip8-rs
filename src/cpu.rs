@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::Read;
 
 pub const GRAPHICS_WIDTH: usize = 64;
-pub const GRAPHICS_HEIGHT: usize = 64;
+pub const GRAPHICS_HEIGHT: usize = 32;
 
 const REGISTERS: usize = 16;
 
@@ -147,8 +147,9 @@ impl Cpu {
                 0x0 => self.mov(opcode.x(), opcode.y()),
                 0x2 => self.and(opcode.x(), opcode.y()),
                 0x4 => self.addr(opcode.x(), opcode.y()),
-                0x6 => self.shr(opcode.x(), opcode.y()),
-                0xE => self.shl(opcode.x(), opcode.y()),
+                0x5 => self.sub(opcode.x(), opcode.y()),
+                0x6 => self.shr(opcode.x()),
+                0xE => self.shl(opcode.x()),
                 _ => panic!("Unknown in math: {}", opcode),
             },
             0xA000 => self.loadi(opcode.nnn()),
@@ -191,8 +192,8 @@ impl Cpu {
         self.program_counter += 2;
     }
 
-    fn rand(&mut self, register: u16, kk: u16) {
-        self.register[usize::from(register)] = random::<u16>() & kk;
+    fn rand(&mut self, x: u16, kk: u16) {
+        self.register[x as usize] = (random::<u16>() & 0xFF) & kk;
         self.program_counter += 2;
     }
 
@@ -212,24 +213,25 @@ impl Cpu {
         let sprite =
             &self.memory[usize::from(self.index_register)..usize::from(self.index_register + n)];
 
-        for (i, byte) in sprite.iter().enumerate() {
-            for num in 0..10 {
-                if (byte & (0x80 >> num)) != 0 {
-                    let position_y: usize = usize::from(pos_y as usize + i) % 32;
-                    let position_x: usize = usize::from(pos_x as usize + num) % 64;
+        for (row, byte) in sprite.iter().enumerate() {
+            for col in 0..8 {
+                let bit = (byte >> (7 - col)) & 0x1 as u16;
 
-                    let pixel = if self.graphics[position_y][position_x] {
-                        1
-                    } else {
-                        0
-                    };
+                // maybe we don't need modulos (but add them if we do)
+                let position_x: usize = (pos_x + col) as usize % GRAPHICS_WIDTH;
+                let position_y: usize = (pos_y + row as u16) as usize % GRAPHICS_HEIGHT;
 
-                    if pixel == 1 {
-                        self.register[0xF] = 1
-                    }
+                let pixel = if self.graphics[position_y][position_x] {
+                    1
+                } else {
+                    0
+                };
 
-                    self.graphics[position_y][position_x] = (pixel ^ 1) == 1;
+                if bit == 1 && pixel == 1 {
+                    self.register[0xF] = 1;
                 }
+
+                self.graphics[position_y][position_x] = (pixel ^ bit) == 1;
             }
         }
 
@@ -238,7 +240,7 @@ impl Cpu {
     }
 
     fn add(&mut self, x: u16, kk: u16) {
-        self.register[usize::from(x)] += kk;
+        self.register[x as usize] += kk;
         self.program_counter += 2;
     }
 
@@ -255,7 +257,7 @@ impl Cpu {
     }
 
     fn load(&mut self, x: u16, kk: u16) {
-        self.register[usize::from(x)] = kk;
+        self.register[x as usize] = kk;
         self.program_counter += 2;
     }
 
@@ -276,7 +278,7 @@ impl Cpu {
         let res = self.register[x as usize] + self.register[y as usize];
 
         self.register[0xF] = 0;
-        if res > 255 {
+        if res > 0xFF {
             self.register[0xF] = 1;
         }
 
@@ -291,8 +293,8 @@ impl Cpu {
     }
 
     fn ret(&mut self) {
-        let ret_addr = self.stack.pop();
-        self.program_counter = ret_addr.expect("Illegal jump with empty stack");
+        let ret_addr = self.stack.pop().expect("Illegal jump with empty stack");
+        self.program_counter = ret_addr;
     }
 
     fn call(&mut self, nnn: u16) {
@@ -313,17 +315,17 @@ impl Cpu {
             self.register[0xF] = 1;
         }
 
-        self.register[x as usize] = val & 0xfff;
+        self.index_register = val & 0xfff;
         self.program_counter += 2;
     }
 
     fn mov(&mut self, x: u16, y: u16) {
-        self.register[y as usize] = self.register[x as usize];
+        self.register[x as usize] = self.register[y as usize];
         self.program_counter += 2;
     }
 
     fn and(&mut self, x: u16, y: u16) {
-        self.register[y as usize] = self.register[x as usize] & self.register[y as usize];
+        self.register[x as usize] = self.register[x as usize] & self.register[y as usize];
         self.program_counter += 2;
     }
 
@@ -332,21 +334,32 @@ impl Cpu {
             self.register[offset as usize] = self.memory[(self.index_register + offset) as usize];
         }
 
-        // self.index_register += x + 1; // this is very questionable
-
         self.program_counter += 2;
     }
 
-    fn shl(&mut self, x: u16, y: u16) {
+    fn shl(&mut self, x: u16) {
         self.register[0xF] = (self.register[x as usize] >> 7) & 0x1;
-        self.register[y as usize] = self.register[x as usize] << 1;
+        self.register[x as usize] = self.register[x as usize] << 1;
         self.program_counter += 2;
     }
 
-    fn shr(&mut self, x: u16, y: u16) {
+    fn shr(&mut self, x: u16) {
         self.register[0xF] = self.register[x as usize] & 0x1;
-        self.register[y as usize] = self.register[x as usize] >> 1;
+
+        self.register[x as usize] = self.register[x as usize] >> 1;
         self.program_counter += 2;
+    }
+
+    fn sub(&mut self, x: u16, y: u16) {
+        let vx: u8 = self.register[x as usize] as u8;
+        let vy: u8 = self.register[y as usize] as u8;
+
+        self.register[0xF] = 0;
+        if vx > vy {
+            self.register[0xF] = 1;
+        }
+
+        self.register[x as usize] = (vx - vy) as u16;
     }
 
     fn stor(&mut self, x: u16) {
@@ -354,13 +367,11 @@ impl Cpu {
             self.memory[(self.index_register + offset) as usize] = self.register[offset as usize];
         }
 
-        // self.index_register += x + 1; // this is very questionable
-
         self.program_counter += 2;
     }
 
-    fn skre(&mut self, register: u16, y: u16) {
-        if self.register[usize::from(register)] == self.register[y as usize] {
+    fn skre(&mut self, x: u16, y: u16) {
+        if self.register[x as usize] == self.register[y as usize] {
             self.program_counter += 4;
         } else {
             self.program_counter += 2;
