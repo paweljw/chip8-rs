@@ -4,7 +4,7 @@ An oversimplified and extremely incomplete CHIP-8 emulator.
 
 ## TODO
 
-- [ ] Support all available demos (more complete opcode emulation)
+- [x] Support all available demos (more complete opcode emulation)
 - [ ] Support keyboard
 - [ ] Support sound (ETA: a couple days after hell has frozen over)
 

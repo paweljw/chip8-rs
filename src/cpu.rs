@@ -146,18 +146,21 @@ impl Cpu {
             0x8000 => match opcode.n() {
                 0x0 => self.mov(opcode.x(), opcode.y()),
                 0x2 => self.and(opcode.x(), opcode.y()),
+                0x3 => self.xor(opcode.x(), opcode.y()),
                 0x4 => self.addr(opcode.x(), opcode.y()),
                 0x5 => self.sub(opcode.x(), opcode.y()),
                 0x6 => self.shr(opcode.x()),
                 0xE => self.shl(opcode.x()),
                 _ => panic!("Unknown in math: {}", opcode),
             },
+            0x9000 => self.skrne(opcode.x(), opcode.y()),
             0xA000 => self.loadi(opcode.nnn()),
             0xC000 => self.rand(opcode.x(), opcode.kk()),
             0xD000 => self.draw(opcode.x(), opcode.y(), opcode.n()),
             0xF000 => match opcode.kk() {
                 0x07 => self.moved(opcode.x()),
                 0x15 => self.loadd(opcode.x()),
+                0x18 => self.loads(opcode.x()),
                 0x1e => self.addi(opcode.x()),
                 0x55 => self.mstor(opcode.x()),
                 0x65 => self.mread(opcode.x()),
@@ -360,6 +363,7 @@ impl Cpu {
         }
 
         self.register[x as usize] = (vx - vy) as u16;
+        self.program_counter += 2;
     }
 
     fn mstor(&mut self, x: u16) {
@@ -372,6 +376,24 @@ impl Cpu {
 
     fn skre(&mut self, x: u16, y: u16) {
         if self.register[x as usize] == self.register[y as usize] {
+            self.program_counter += 4;
+        } else {
+            self.program_counter += 2;
+        }
+    }
+
+    fn loads(&mut self, x: u16) {
+        self.sound_timer = self.register[x as usize];
+        self.program_counter += 2;
+    }
+
+    fn xor(&mut self, x: u16, y: u16) {
+        self.register[x as usize] = self.register[x as usize] ^ self.register[y as usize];
+        self.program_counter += 2;
+    }
+
+    fn skrne(&mut self, x: u16, y: u16) {
+        if self.register[x as usize] != self.register[y as usize] {
             self.program_counter += 4;
         } else {
             self.program_counter += 2;
