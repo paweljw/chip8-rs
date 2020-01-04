@@ -96,12 +96,33 @@ impl Cpu {
         match opcode.t() {
             0x1000 => self.jump(opcode.nnn()),
             0x3000 => self.ske(opcode.x(), opcode.kk()),
+            0x4000 => self.skne(opcode.x(), opcode.kk()),
             0x6000 => self.load(opcode.x(), opcode.kk()),
             0x7000 => self.add(opcode.x(), opcode.kk()),
+            0x8000 => match opcode.n() {
+                0x4 => self.addr(opcode.x(), opcode.y()),
+                _ => panic!("Unknown in math: {}", opcode),
+            },
             0xA000 => self.loadi(opcode.nnn()),
             0xC000 => self.rand(opcode.x(), opcode.kk()),
             0xD000 => self.draw(opcode.x(), opcode.y(), opcode.n()),
+            0xF000 => match opcode.kk() {
+                0x15 => self.loadd(opcode.x()),
+                _ => panic!("Unknown NN for opcode: {}", opcode),
+            },
             _ => panic!("Unknown opcode: {}", opcode),
+        }
+
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+
+        if self.sound_timer > 0 {
+            self.sound_timer -= 1;
+
+            if self.sound_timer == 0 {
+                println!("BEEP!")
+            }
         }
     }
 
@@ -195,6 +216,32 @@ impl Cpu {
 
     fn load(&mut self, x: u16, kk: u16) {
         self.register[usize::from(x)] = kk;
+        self.program_counter += 2;
+    }
+
+    fn loadd(&mut self, x: u16) {
+        self.delay_timer = self.register[usize::from(x)];
+        self.program_counter += 2;
+    }
+
+    fn skne(&mut self, x: u16, kk: u16) {
+        if self.register[usize::from(x)] != kk {
+            self.program_counter += 4;
+        } else {
+            self.program_counter += 2;
+        }
+    }
+
+    fn addr(&mut self, x: u16, y: u16) {
+        let res = self.register[x as usize] + self.register[y as usize];
+
+        self.register[0xF] = 0;
+        if res > 255 {
+            self.register[0xF] = 1;
+        }
+
+        self.register[x as usize] = res & 0xFF;
+
         self.program_counter += 2;
     }
 }
