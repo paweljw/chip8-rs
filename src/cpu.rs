@@ -145,16 +145,19 @@ impl Cpu {
             0x7000 => self.add(opcode.x(), opcode.kk()),
             0x8000 => match opcode.n() {
                 0x0 => self.mov(opcode.x(), opcode.y()),
+                0x1 => self.or(opcode.x(), opcode.y()),
                 0x2 => self.and(opcode.x(), opcode.y()),
                 0x3 => self.xor(opcode.x(), opcode.y()),
                 0x4 => self.addr(opcode.x(), opcode.y()),
                 0x5 => self.sub(opcode.x(), opcode.y()),
                 0x6 => self.shr(opcode.x()),
+                0x7 => self.ssub(opcode.x(), opcode.y()),
                 0xE => self.shl(opcode.x()),
                 _ => panic!("Unknown in math: {}", opcode),
             },
             0x9000 => self.skrne(opcode.x(), opcode.y()),
             0xA000 => self.loadi(opcode.nnn()),
+            0xB000 => self.jumpi(opcode.nnn()),
             0xC000 => self.rand(opcode.x(), opcode.kk()),
             0xD000 => self.draw(opcode.x(), opcode.y(), opcode.n()),
             0xF000 => match opcode.kk() {
@@ -358,7 +361,7 @@ impl Cpu {
         let vy: u8 = self.register[y as usize] as u8;
 
         self.register[0xF] = 0;
-        if vx > vy {
+        if vy > vx {
             self.register[0xF] = 1;
         }
 
@@ -398,5 +401,27 @@ impl Cpu {
         } else {
             self.program_counter += 2;
         }
+    }
+
+    fn or(&mut self, x: u16, y: u16) {
+        self.register[x as usize] = self.register[x as usize] | self.register[y as usize];
+        self.program_counter += 2;
+    }
+
+    fn ssub(&mut self, x: u16, y: u16) {
+        let vx: u8 = self.register[x as usize] as u8;
+        let vy: u8 = self.register[y as usize] as u8;
+
+        self.register[0xF] = 0;
+        if vx > vy {
+            self.register[0xF] = 1;
+        }
+
+        self.register[x as usize] = (vy - vx) as u16;
+        self.program_counter += 2;
+    }
+
+    fn jumpi(&mut self, nnn: u16) {
+        self.program_counter = self.register[0x0] + nnn;
     }
 }

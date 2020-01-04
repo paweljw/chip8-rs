@@ -55,6 +55,7 @@ impl Opcode {
                 0x4 => format!("ADDR  V{:#}, V{:#}", self.x(), self.y()),
                 0x5 => format!("SUB   V{:#}, V{:#}", self.x(), self.y()),
                 0x6 => format!("SHR   V{:#}, V{:#}", self.x(), self.y()),
+                0x7 => format!("SSUB  V{:#}, V{:#}", self.x(), self.y()),
                 0xE => format!("SHL   V{:#}, V{:#}", self.x(), self.y()),
                 _ => String::from("UNUS"),
             },
