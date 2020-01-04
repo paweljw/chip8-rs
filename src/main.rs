@@ -78,9 +78,10 @@ fn main() {
         if cpu.draw_flag {
             convert_graphics(&mut cpu, &mut buffer);
             cpu.draw_done();
+            window.update_with_buffer(&buffer, 64, 32).unwrap();
+        } else {
+            window.update();
         }
-
-        window.update_with_buffer(&buffer, 64, 32).unwrap();
     }
 }
 

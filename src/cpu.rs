@@ -8,6 +8,25 @@ pub const GRAPHICS_HEIGHT: usize = 64;
 
 const REGISTERS: usize = 16;
 
+const FONTSET: [u16; 80] = [
+    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+    0x20, 0x60, 0x20, 0x20, 0x70, // 1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
+];
+
 pub struct Cpu {
     program_counter: u16,
     index_register: u16,
@@ -20,6 +39,7 @@ pub struct Cpu {
     pub draw_flag: bool,
     done: bool,
     debug: bool,
+    stack: Vec<u16>,
 }
 
 impl Cpu {
@@ -36,6 +56,7 @@ impl Cpu {
             draw_flag: false,
             done: false,
             debug: false,
+            stack: Vec::<u16>::new(),
         }
     }
 
@@ -54,6 +75,10 @@ impl Cpu {
         let mut game_data = Vec::new();
         file.read_to_end(&mut game_data)
             .expect("Failure to read file");
+
+        for i in 0..80 {
+            self.memory[i as usize] = FONTSET[i as usize];
+        }
 
         for i in &game_data {
             self.memory[usize::from(self.program_counter)] = u16::from(*i);
@@ -93,26 +118,6 @@ impl Cpu {
             println!("{:#06x}: {}", self.program_counter, opcode);
         }
 
-        match opcode.t() {
-            0x1000 => self.jump(opcode.nnn()),
-            0x3000 => self.ske(opcode.x(), opcode.kk()),
-            0x4000 => self.skne(opcode.x(), opcode.kk()),
-            0x6000 => self.load(opcode.x(), opcode.kk()),
-            0x7000 => self.add(opcode.x(), opcode.kk()),
-            0x8000 => match opcode.n() {
-                0x4 => self.addr(opcode.x(), opcode.y()),
-                _ => panic!("Unknown in math: {}", opcode),
-            },
-            0xA000 => self.loadi(opcode.nnn()),
-            0xC000 => self.rand(opcode.x(), opcode.kk()),
-            0xD000 => self.draw(opcode.x(), opcode.y(), opcode.n()),
-            0xF000 => match opcode.kk() {
-                0x15 => self.loadd(opcode.x()),
-                _ => panic!("Unknown NN for opcode: {}", opcode),
-            },
-            _ => panic!("Unknown opcode: {}", opcode),
-        }
-
         if self.delay_timer > 0 {
             self.delay_timer -= 1;
         }
@@ -123,6 +128,37 @@ impl Cpu {
             if self.sound_timer == 0 {
                 println!("BEEP!")
             }
+        }
+
+        match opcode.t() {
+            0x0000 => match opcode.kk() {
+                0x00e0 => self.clr(),
+                0x00ee => self.ret(),
+                _ => panic!("Unknown in 00: {}", opcode),
+            },
+            0x1000 => self.jump(opcode.nnn()),
+            0x2000 => self.call(opcode.nnn()),
+            0x3000 => self.ske(opcode.x(), opcode.kk()),
+            0x4000 => self.skne(opcode.x(), opcode.kk()),
+            0x6000 => self.load(opcode.x(), opcode.kk()),
+            0x7000 => self.add(opcode.x(), opcode.kk()),
+            0x8000 => match opcode.n() {
+                0x0 => self.mov(opcode.x(), opcode.y()),
+                0x2 => self.and(opcode.x(), opcode.y()),
+                0x4 => self.addr(opcode.x(), opcode.y()),
+                _ => panic!("Unknown in math: {}", opcode),
+            },
+            0xA000 => self.loadi(opcode.nnn()),
+            0xC000 => self.rand(opcode.x(), opcode.kk()),
+            0xD000 => self.draw(opcode.x(), opcode.y(), opcode.n()),
+            0xF000 => match opcode.kk() {
+                0x07 => self.moved(opcode.x()),
+                0x15 => self.loadd(opcode.x()),
+                0x1e => self.addi(opcode.x()),
+                0x65 => self.read(opcode.x()),
+                _ => panic!("Unknown NN for opcode: {}", opcode),
+            },
+            _ => panic!("Unknown opcode: {}", opcode),
         }
     }
 
@@ -137,7 +173,7 @@ impl Cpu {
         self.delay_timer = 0;
         self.sound_timer = 0;
         self.register = [0; REGISTERS];
-        self.graphics = [[false; GRAPHICS_WIDTH]; GRAPHICS_HEIGHT];
+        self.clr();
         self.draw_flag = false;
         self.done = false;
     }
@@ -173,10 +209,10 @@ impl Cpu {
             &self.memory[usize::from(self.index_register)..usize::from(self.index_register + n)];
 
         for (i, byte) in sprite.iter().enumerate() {
-            for num in 0..7 {
+            for num in 0..8 {
                 if (byte & (0x80 >> num)) != 0 {
-                    let position_y: usize = usize::from(pos_y) + i;
-                    let position_x: usize = usize::from(pos_x + num);
+                    let position_y: usize = (usize::from(pos_y) + i) % 32;
+                    let position_x: usize = usize::from((pos_x + num) % 64);
 
                     let pixel = if self.graphics[position_y][position_x] {
                         1
@@ -241,6 +277,56 @@ impl Cpu {
         }
 
         self.register[x as usize] = res & 0xFF;
+
+        self.program_counter += 2;
+    }
+
+    fn clr(&mut self) {
+        self.graphics = [[false; GRAPHICS_WIDTH]; GRAPHICS_HEIGHT];
+        self.program_counter += 2;
+    }
+
+    fn ret(&mut self) {
+        let ret_addr = self.stack.pop();
+        self.program_counter = ret_addr.expect("Illegal jump with empty stack");
+    }
+
+    fn call(&mut self, nnn: u16) {
+        self.stack.push(self.program_counter + 2);
+        self.program_counter = nnn;
+    }
+
+    fn moved(&mut self, x: u16) {
+        self.register[x as usize] = self.delay_timer;
+        self.program_counter += 2;
+    }
+
+    fn addi(&mut self, x: u16) {
+        let val = self.register[x as usize] + self.index_register;
+
+        self.register[0xF] = 0;
+        if val > 0xfff {
+            self.register[0xF] = 1;
+        }
+
+        self.register[x as usize] = val & 0xfff;
+        self.program_counter += 2;
+    }
+
+    fn mov(&mut self, x: u16, y: u16) {
+        self.register[y as usize] = self.register[x as usize];
+        self.program_counter += 2;
+    }
+
+    fn and(&mut self, x: u16, y: u16) {
+        self.register[y as usize] = self.register[x as usize] & self.register[y as usize];
+        self.program_counter += 2;
+    }
+
+    fn read(&mut self, x: u16) {
+        for offset in 0..(x + 1) {
+            self.register[offset as usize] = self.memory[(self.index_register + offset) as usize];
+        }
 
         self.program_counter += 2;
     }
