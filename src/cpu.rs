@@ -159,8 +159,8 @@ impl Cpu {
                 0x07 => self.moved(opcode.x()),
                 0x15 => self.loadd(opcode.x()),
                 0x1e => self.addi(opcode.x()),
-                0x55 => self.stor(opcode.x()),
-                0x65 => self.read(opcode.x()),
+                0x55 => self.mstor(opcode.x()),
+                0x65 => self.mread(opcode.x()),
                 _ => panic!("Unknown NN for opcode: {}", opcode),
             },
             _ => panic!("Unknown opcode: {}", opcode),
@@ -329,7 +329,7 @@ impl Cpu {
         self.program_counter += 2;
     }
 
-    fn read(&mut self, x: u16) {
+    fn mread(&mut self, x: u16) {
         for offset in 0..(x + 1) {
             self.register[offset as usize] = self.memory[(self.index_register + offset) as usize];
         }
@@ -362,7 +362,7 @@ impl Cpu {
         self.register[x as usize] = (vx - vy) as u16;
     }
 
-    fn stor(&mut self, x: u16) {
+    fn mstor(&mut self, x: u16) {
         for offset in 0..(x + 1) {
             self.memory[(self.index_register + offset) as usize] = self.register[offset as usize];
         }
