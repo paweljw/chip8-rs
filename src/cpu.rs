@@ -5,6 +5,7 @@ use std::io::Read;
 
 pub const GRAPHICS_WIDTH: usize = 64;
 pub const GRAPHICS_HEIGHT: usize = 32;
+pub const FONTSET_BYTES_PER_CHAR: u16 = 5;
 
 const REGISTERS: usize = 16;
 
@@ -40,6 +41,7 @@ pub struct Cpu {
     done: bool,
     debug: bool,
     stack: Vec<u16>,
+    keys: [bool; 16],
 }
 
 impl Cpu {
@@ -57,11 +59,18 @@ impl Cpu {
             done: false,
             debug: false,
             stack: Vec::<u16>::new(),
+            keys: [false; 16],
+        }
+    }
+
+    pub fn set_keys(&mut self, keys: &Vec<bool>) {
+        for (i, &elem) in keys.iter().enumerate() {
+            self.keys[i] = elem
         }
     }
 
     pub fn fetch_opcode(&self) -> Opcode {
-        self.opcode_at(usize::from(self.program_counter))
+        self.opcode_at(self.program_counter as usize)
     }
 
     fn opcode_at(&self, at: usize) -> Opcode {
@@ -160,10 +169,17 @@ impl Cpu {
             0xB000 => self.jumpi(opcode.nnn()),
             0xC000 => self.rand(opcode.x(), opcode.kk()),
             0xD000 => self.draw(opcode.x(), opcode.y(), opcode.n()),
+            0xE000 => match opcode.kk() {
+                0x9E => self.skpr(opcode.x()),
+                0xA1 => self.skup(opcode.x()),
+                _ => panic!("Unknown in keys: {}", opcode),
+            },
             0xF000 => match opcode.kk() {
                 0x07 => self.moved(opcode.x()),
                 0x15 => self.loadd(opcode.x()),
                 0x18 => self.loads(opcode.x()),
+                0x29 => self.ldspr(opcode.x()),
+                0x33 => self.bcd(opcode.x()),
                 0x1e => self.addi(opcode.x()),
                 0x55 => self.mstor(opcode.x()),
                 0x65 => self.mread(opcode.x()),
@@ -428,5 +444,34 @@ impl Cpu {
 
     fn jumpi(&mut self, nnn: u16) {
         self.program_counter = self.register[0x0] as u16 + nnn;
+    }
+
+    fn skpr(&mut self, x: u8) {
+        if self.keys[self.register[x as usize] as usize] {
+            self.program_counter += 4;
+        } else {
+            self.program_counter += 2;
+        }
+    }
+
+    fn skup(&mut self, x: u8) {
+        if self.keys[self.register[x as usize] as usize] {
+            self.program_counter += 2;
+        } else {
+            self.program_counter += 4;
+        }
+    }
+
+    fn ldspr(&mut self, x: u8) {
+        self.index_register = self.register[x as usize] as u16 * FONTSET_BYTES_PER_CHAR;
+        self.program_counter += 2;
+    }
+
+    fn bcd(&mut self, x: u8) {
+        self.memory[self.index_register as usize] =
+            ((self.register[x as usize] as u16 % 1000) / 100) as u8;
+        self.memory[self.index_register as usize + 1] = (self.register[x as usize] % 100) / 10;
+        self.memory[self.index_register as usize + 2] = self.register[x as usize] % 100;
+        self.program_counter += 2;
     }
 }
