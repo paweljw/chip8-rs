@@ -109,9 +109,9 @@ fn convert_graphics(cpu: &mut Cpu, buffer: &mut Vec<u32>) {
     for y in 0..32 {
         for x in 0..64 {
             buffer[y * 64 + x] = if cpu.graphics[y as usize][x as usize] {
-                0x0095956e
-            } else {
                 0x003f3f3f
+            } else {
+                0x0095956e
             }
         }
     }

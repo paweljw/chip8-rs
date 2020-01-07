@@ -180,6 +180,7 @@ impl Cpu {
                 0x18 => self.loads(opcode.x()),
                 0x29 => self.ldspr(opcode.x()),
                 0x33 => self.bcd(opcode.x()),
+                0x0A => self.keyd(opcode.x()),
                 0x1e => self.addi(opcode.x()),
                 0x55 => self.mstor(opcode.x()),
                 0x65 => self.mread(opcode.x()),
@@ -239,7 +240,6 @@ impl Cpu {
             for col in 0..8 {
                 let bit = (byte >> (7 - col)) & 0x1;
 
-                // maybe we don't need modulos (but add them if we do)
                 let position_x: usize = (pos_x + col) as usize % GRAPHICS_WIDTH;
                 let position_y: usize = (pos_y + row as u8) as usize % GRAPHICS_HEIGHT;
 
@@ -473,5 +473,15 @@ impl Cpu {
         self.memory[self.index_register as usize + 1] = (self.register[x as usize] % 100) / 10;
         self.memory[self.index_register as usize + 2] = self.register[x as usize] % 100;
         self.program_counter += 2;
+    }
+
+    fn keyd(&mut self, x: u8) {
+        for (i, &item) in self.keys.iter().enumerate() {
+            if item {
+                self.register[x as usize] = i as u8;
+                self.program_counter += 2;
+                return;
+            }
+        }
     }
 }
