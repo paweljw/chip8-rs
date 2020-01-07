@@ -9,20 +9,20 @@ impl Opcode {
         Opcode { opcode }
     }
 
-    pub fn x(&self) -> u16 {
-        (self.opcode & 0x0f00) >> 8
+    pub fn x(&self) -> u8 {
+        ((self.opcode & 0x0f00) >> 8) as u8
     }
 
-    pub fn y(&self) -> u16 {
-        (self.opcode & 0x00f0) >> 4
+    pub fn y(&self) -> u8 {
+        ((self.opcode & 0x00f0) >> 4) as u8
     }
 
-    pub fn n(&self) -> u16 {
-        self.opcode & 0x000f
+    pub fn n(&self) -> u8 {
+        (self.opcode & 0x000f) as u8
     }
 
-    pub fn kk(&self) -> u16 {
-        self.opcode & 0x00ff
+    pub fn kk(&self) -> u8 {
+        (self.opcode & 0x00ff) as u8
     }
 
     pub fn nnn(&self) -> u16 {

@@ -8,7 +8,7 @@ pub const GRAPHICS_HEIGHT: usize = 32;
 
 const REGISTERS: usize = 16;
 
-const FONTSET: [u16; 80] = [
+const FONTSET: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
     0x20, 0x60, 0x20, 0x20, 0x70, // 1
     0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
@@ -31,10 +31,10 @@ pub struct Cpu {
     program_counter: u16,
     index_register: u16,
     stack_pointer: u16,
-    memory: [u16; 4096],
-    delay_timer: u16,
-    sound_timer: u16,
-    register: [u16; REGISTERS],
+    memory: [u8; 4096],
+    delay_timer: u8,
+    sound_timer: u8,
+    register: [u8; REGISTERS],
     pub graphics: [[bool; GRAPHICS_WIDTH]; GRAPHICS_HEIGHT],
     pub draw_flag: bool,
     done: bool,
@@ -65,7 +65,7 @@ impl Cpu {
     }
 
     fn opcode_at(&self, at: usize) -> Opcode {
-        let opcode = (self.memory[at] << 8) + self.memory[at + 1];
+        let opcode: u16 = ((self.memory[at] as u16) << 8) + self.memory[at + 1] as u16;
 
         Opcode::new(opcode)
     }
@@ -81,7 +81,7 @@ impl Cpu {
         }
 
         for i in &game_data {
-            self.memory[usize::from(self.program_counter)] = u16::from(*i);
+            self.memory[self.program_counter as usize] = *i as u8;
             self.program_counter += 1;
         }
 
@@ -198,12 +198,12 @@ impl Cpu {
         self.program_counter += 2;
     }
 
-    fn rand(&mut self, x: u16, kk: u16) {
-        self.register[x as usize] = (random::<u16>() & 0xFF) & kk;
+    fn rand(&mut self, x: u8, kk: u8) {
+        self.register[x as usize] = random::<u8>() & kk;
         self.program_counter += 2;
     }
 
-    fn ske(&mut self, register: u16, kk: u16) {
+    fn ske(&mut self, register: u8, kk: u8) {
         if self.register[usize::from(register)] == kk {
             self.program_counter += 4;
         } else {
@@ -211,21 +211,21 @@ impl Cpu {
         }
     }
 
-    fn draw(&mut self, register_x: u16, register_y: u16, n: u16) {
+    fn draw(&mut self, register_x: u8, register_y: u8, n: u8) {
         self.register[0xF] = 0;
         let pos_x = self.register[usize::from(register_x)];
         let pos_y = self.register[usize::from(register_y)];
 
-        let sprite =
-            &self.memory[usize::from(self.index_register)..usize::from(self.index_register + n)];
+        let sprite = &self.memory
+            [usize::from(self.index_register)..usize::from(self.index_register + n as u16)];
 
         for (row, byte) in sprite.iter().enumerate() {
             for col in 0..8 {
-                let bit = (byte >> (7 - col)) & 0x1 as u16;
+                let bit = (byte >> (7 - col)) & 0x1;
 
                 // maybe we don't need modulos (but add them if we do)
                 let position_x: usize = (pos_x + col) as usize % GRAPHICS_WIDTH;
-                let position_y: usize = (pos_y + row as u16) as usize % GRAPHICS_HEIGHT;
+                let position_y: usize = (pos_y + row as u8) as usize % GRAPHICS_HEIGHT;
 
                 let pixel = if self.graphics[position_y][position_x] {
                     1
@@ -245,7 +245,7 @@ impl Cpu {
         self.program_counter += 2;
     }
 
-    fn add(&mut self, x: u16, kk: u16) {
+    fn add(&mut self, x: u8, kk: u8) {
         self.register[x as usize] += kk;
         self.program_counter += 2;
     }
@@ -262,33 +262,36 @@ impl Cpu {
         self.program_counter = nnn;
     }
 
-    fn load(&mut self, x: u16, kk: u16) {
+    fn load(&mut self, x: u8, kk: u8) {
         self.register[x as usize] = kk;
         self.program_counter += 2;
     }
 
-    fn loadd(&mut self, x: u16) {
-        self.delay_timer = self.register[usize::from(x)];
+    fn loadd(&mut self, x: u8) {
+        self.delay_timer = self.register[x as usize];
         self.program_counter += 2;
     }
 
-    fn skne(&mut self, x: u16, kk: u16) {
-        if self.register[usize::from(x)] != kk {
+    fn skne(&mut self, x: u8, kk: u8) {
+        if self.register[x as usize] != kk {
             self.program_counter += 4;
         } else {
             self.program_counter += 2;
         }
     }
 
-    fn addr(&mut self, x: u16, y: u16) {
-        let res = self.register[x as usize] + self.register[y as usize];
+    // Sigh, I know. There has to be a better way than to upcast them to a longer type
+    // just to see whether the sum involves a carry.
+    // Oh well.
+    fn addr(&mut self, x: u8, y: u8) {
+        let res: u16 = self.register[x as usize] as u16 + self.register[y as usize] as u16;
 
         self.register[0xF] = 0;
         if res > 0xFF {
             self.register[0xF] = 1;
         }
 
-        self.register[x as usize] = res & 0xFF;
+        self.register[x as usize] = res as u8 & 0xFF;
 
         self.program_counter += 2;
     }
@@ -308,13 +311,13 @@ impl Cpu {
         self.program_counter = nnn;
     }
 
-    fn moved(&mut self, x: u16) {
+    fn moved(&mut self, x: u8) {
         self.register[x as usize] = self.delay_timer;
         self.program_counter += 2;
     }
 
-    fn addi(&mut self, x: u16) {
-        let val = self.register[x as usize] + self.index_register;
+    fn addi(&mut self, x: u8) {
+        let val = self.register[x as usize] as u16 + self.index_register;
 
         self.register[0xF] = 0;
         if val > 0xfff {
@@ -325,38 +328,39 @@ impl Cpu {
         self.program_counter += 2;
     }
 
-    fn mov(&mut self, x: u16, y: u16) {
+    fn mov(&mut self, x: u8, y: u8) {
         self.register[x as usize] = self.register[y as usize];
         self.program_counter += 2;
     }
 
-    fn and(&mut self, x: u16, y: u16) {
+    fn and(&mut self, x: u8, y: u8) {
         self.register[x as usize] = self.register[x as usize] & self.register[y as usize];
         self.program_counter += 2;
     }
 
-    fn mread(&mut self, x: u16) {
+    fn mread(&mut self, x: u8) {
         for offset in 0..(x + 1) {
-            self.register[offset as usize] = self.memory[(self.index_register + offset) as usize];
+            self.register[offset as usize] =
+                self.memory[(self.index_register + offset as u16) as usize];
         }
 
         self.program_counter += 2;
     }
 
-    fn shl(&mut self, x: u16) {
+    fn shl(&mut self, x: u8) {
         self.register[0xF] = (self.register[x as usize] >> 7) & 0x1;
         self.register[x as usize] = self.register[x as usize] << 1;
         self.program_counter += 2;
     }
 
-    fn shr(&mut self, x: u16) {
+    fn shr(&mut self, x: u8) {
         self.register[0xF] = self.register[x as usize] & 0x1;
 
         self.register[x as usize] = self.register[x as usize] >> 1;
         self.program_counter += 2;
     }
 
-    fn sub(&mut self, x: u16, y: u16) {
+    fn sub(&mut self, x: u8, y: u8) {
         let vx: u8 = self.register[x as usize] as u8;
         let vy: u8 = self.register[y as usize] as u8;
 
@@ -365,19 +369,20 @@ impl Cpu {
             self.register[0xF] = 1;
         }
 
-        self.register[x as usize] = (vx - vy) as u16;
+        self.register[x as usize] = vx - vy;
         self.program_counter += 2;
     }
 
-    fn mstor(&mut self, x: u16) {
+    fn mstor(&mut self, x: u8) {
         for offset in 0..(x + 1) {
-            self.memory[(self.index_register + offset) as usize] = self.register[offset as usize];
+            self.memory[(self.index_register + offset as u16) as usize] =
+                self.register[offset as usize];
         }
 
         self.program_counter += 2;
     }
 
-    fn skre(&mut self, x: u16, y: u16) {
+    fn skre(&mut self, x: u8, y: u8) {
         if self.register[x as usize] == self.register[y as usize] {
             self.program_counter += 4;
         } else {
@@ -385,17 +390,17 @@ impl Cpu {
         }
     }
 
-    fn loads(&mut self, x: u16) {
+    fn loads(&mut self, x: u8) {
         self.sound_timer = self.register[x as usize];
         self.program_counter += 2;
     }
 
-    fn xor(&mut self, x: u16, y: u16) {
+    fn xor(&mut self, x: u8, y: u8) {
         self.register[x as usize] = self.register[x as usize] ^ self.register[y as usize];
         self.program_counter += 2;
     }
 
-    fn skrne(&mut self, x: u16, y: u16) {
+    fn skrne(&mut self, x: u8, y: u8) {
         if self.register[x as usize] != self.register[y as usize] {
             self.program_counter += 4;
         } else {
@@ -403,12 +408,12 @@ impl Cpu {
         }
     }
 
-    fn or(&mut self, x: u16, y: u16) {
+    fn or(&mut self, x: u8, y: u8) {
         self.register[x as usize] = self.register[x as usize] | self.register[y as usize];
         self.program_counter += 2;
     }
 
-    fn ssub(&mut self, x: u16, y: u16) {
+    fn ssub(&mut self, x: u8, y: u8) {
         let vx: u8 = self.register[x as usize] as u8;
         let vy: u8 = self.register[y as usize] as u8;
 
@@ -417,11 +422,11 @@ impl Cpu {
             self.register[0xF] = 1;
         }
 
-        self.register[x as usize] = (vy - vx) as u16;
+        self.register[x as usize] = vy - vx;
         self.program_counter += 2;
     }
 
     fn jumpi(&mut self, nnn: u16) {
-        self.program_counter = self.register[0x0] + nnn;
+        self.program_counter = self.register[0x0] as u16 + nnn;
     }
 }
