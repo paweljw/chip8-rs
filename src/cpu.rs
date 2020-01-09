@@ -65,7 +65,13 @@ impl Cpu {
 
     pub fn set_keys(&mut self, keys: &Vec<bool>) {
         for (i, &elem) in keys.iter().enumerate() {
-            self.keys[i] = elem
+            self.keys[i] = elem;
+        }
+    }
+
+    pub fn reset_keys(&mut self) {
+        for i in 0..16 {
+            self.keys[i] = false;
         }
     }
 
@@ -448,6 +454,7 @@ impl Cpu {
 
     fn skpr(&mut self, x: u8) {
         if self.keys[self.register[x as usize] as usize] {
+            self.reset_keys();
             self.program_counter += 4;
         } else {
             self.program_counter += 2;
@@ -456,6 +463,7 @@ impl Cpu {
 
     fn skup(&mut self, x: u8) {
         if self.keys[self.register[x as usize] as usize] {
+            self.reset_keys();
             self.program_counter += 2;
         } else {
             self.program_counter += 4;
