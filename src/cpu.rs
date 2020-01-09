@@ -1,7 +1,9 @@
 use crate::opcode::Opcode;
 use rand::random;
+use rodio::Sink;
 use std::fs::File;
 use std::io::Read;
+use std::{thread, time::Duration};
 
 pub const GRAPHICS_WIDTH: usize = 64;
 pub const GRAPHICS_HEIGHT: usize = 32;
@@ -42,10 +44,17 @@ pub struct Cpu {
     debug: bool,
     stack: Vec<u16>,
     keys: [bool; 16],
+    sink: Sink,
 }
 
 impl Cpu {
     pub fn new() -> Cpu {
+        let device = rodio::default_output_device().unwrap();
+        let sink = Sink::new(&device);
+        sink.pause();
+        let source = rodio::source::SineWave::new(440);
+        sink.append(source);
+
         Cpu {
             program_counter: 0x200,
             index_register: 0,
@@ -60,13 +69,12 @@ impl Cpu {
             debug: false,
             stack: Vec::<u16>::new(),
             keys: [false; 16],
+            sink: sink,
         }
     }
 
-    pub fn set_keys(&mut self, keys: &Vec<bool>) {
-        for (i, &elem) in keys.iter().enumerate() {
-            self.keys[i] = elem;
-        }
+    pub fn set_key(&mut self, key: u8) {
+        self.keys[key as usize] = true;
     }
 
     pub fn reset_keys(&mut self) {
@@ -138,11 +146,11 @@ impl Cpu {
         }
 
         if self.sound_timer > 0 {
-            self.sound_timer -= 1;
+            self.sink.play();
+            thread::sleep(Duration::from_micros(16600) * self.sound_timer as u32);
+            self.sink.pause();
 
-            if self.sound_timer == 0 {
-                println!("BEEP!")
-            }
+            self.sound_timer = 0;
         }
 
         match opcode.t() {

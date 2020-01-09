@@ -12,7 +12,7 @@ const INITIAL_SPEED: u8 = 10;
 const MIN_SPEED: u8 = 1;
 const MAX_SPEED: u8 = 40;
 
-const KEY_DEBOUNCE: u8 = 10;
+const KEY_DEBOUNCE: u8 = 5;
 
 fn main() {
     let mut cpu = Cpu::new();
@@ -73,27 +73,33 @@ fn main() {
             cpu.restart();
         }
 
-        let mut keys = Vec::<bool>::new();
-        keys.push(window.is_key_down(Key::X));
-        keys.push(window.is_key_down(Key::Key1));
-        keys.push(window.is_key_down(Key::Key2));
-        keys.push(window.is_key_down(Key::Key3));
-        keys.push(window.is_key_down(Key::Q));
-        keys.push(window.is_key_down(Key::W));
-        keys.push(window.is_key_down(Key::E));
-        keys.push(window.is_key_down(Key::A));
-        keys.push(window.is_key_down(Key::S));
-        keys.push(window.is_key_down(Key::D));
-        keys.push(window.is_key_down(Key::Z));
-        keys.push(window.is_key_down(Key::C));
-        keys.push(window.is_key_down(Key::Key4));
-        keys.push(window.is_key_down(Key::R));
-        keys.push(window.is_key_down(Key::F));
-        keys.push(window.is_key_down(Key::V));
-
-        cpu.set_keys(&keys);
-
-        cpu.steps(speed);
+        for _ in 0..speed {
+            cpu.reset_keys();
+            window.get_keys().map(|keys| {
+                for t in keys {
+                    match t {
+                        Key::X => cpu.set_key(0),
+                        Key::Key1 => cpu.set_key(1),
+                        Key::Key2 => cpu.set_key(2),
+                        Key::Key3 => cpu.set_key(3),
+                        Key::Q => cpu.set_key(4),
+                        Key::W => cpu.set_key(5),
+                        Key::E => cpu.set_key(6),
+                        Key::A => cpu.set_key(7),
+                        Key::S => cpu.set_key(8),
+                        Key::D => cpu.set_key(9),
+                        Key::Z => cpu.set_key(0xA),
+                        Key::C => cpu.set_key(0xB),
+                        Key::Key4 => cpu.set_key(0xC),
+                        Key::R => cpu.set_key(0xD),
+                        Key::F => cpu.set_key(0xE),
+                        Key::V => cpu.set_key(0xF),
+                        _ => (),
+                    }
+                }
+            });
+            cpu.steps(1);
+        }
 
         if cpu.draw_flag {
             convert_graphics(&mut cpu, &mut buffer);

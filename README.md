@@ -6,8 +6,8 @@ An oversimplified and extremely incomplete CHIP-8 emulator.
 
 - [x] Support all available demos (more complete opcode emulation)
 - [x] Support keyboard
-- [ ] Properly debounce keyboard (at 10x speed, bounces from hell)
-- [ ] Support sound (ETA: a couple days after hell has frozen over)
+- [x] Properly debounce keyboard (at 10x speed, bounces from hell)
+- [x] Support sound (actually supported now, hell hath frozen over)
 
 ## Usage
 
